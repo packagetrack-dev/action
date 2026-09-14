@@ -1,0 +1,67 @@
+name: "PackageTrack"
+description: "Push this build's dependency set to PackageTrack and print what is behind or withdrawn."
+author: "PackageTrack"
+
+branding:
+  icon: "package"
+  color: "blue"
+
+inputs:
+  api-key:
+    description: "A PackageTrack API key. Store it as a repository secret and pass it as ${{ secrets.PACKAGETRACK_API_KEY }}."
+    required: true
+  project:
+    description: "Directory to read the lock file from. Default: the repository root."
+    required: false
+    default: "."
+  name:
+    description: "What to call this project in PackageTrack. Default: the directory name."
+    required: false
+    default: ""
+  ecosystem:
+    description: "Read only this ecosystem (pypi, npm). Default: every lock file found."
+    required: false
+    default: ""
+  server:
+    description: "PackageTrack server. Only for self-hosted installs."
+    required: false
+    default: "https://packagetrack.dev"
+  dry-run:
+    description: "Print exactly what would be sent and send nothing. Needs no API key."
+    required: false
+    default: "false"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install packagetrackdev
+      shell: bash
+      env:
+        PT_SERVER: ${{ inputs.server }}
+      run: |
+        set -euo pipefail
+        curl -fsSL "$PT_SERVER/install.sh" | sh
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+    - name: Push the dependency set
+      shell: bash
+      env:
+        PACKAGETRACK_API_KEY: ${{ inputs.api-key }}
+        PT_PROJECT: ${{ inputs.project }}
+        PT_NAME: ${{ inputs.name }}
+        PT_ECOSYSTEM: ${{ inputs.ecosystem }}
+        PT_SERVER: ${{ inputs.server }}
+        PT_DRY_RUN: ${{ inputs.dry-run }}
+      run: |
+        set -euo pipefail
+        args=(push --project "$PT_PROJECT" --server "$PT_SERVER")
+        if [ -n "$PT_NAME" ]; then
+          args+=(--name "$PT_NAME")
+        fi
+        if [ -n "$PT_ECOSYSTEM" ]; then
+          args+=(--ecosystem "$PT_ECOSYSTEM")
+        fi
+        if [ "$PT_DRY_RUN" = "true" ]; then
+          args+=(--dry-run)
+        fi
+        packagetrackdev "${args[@]}"
